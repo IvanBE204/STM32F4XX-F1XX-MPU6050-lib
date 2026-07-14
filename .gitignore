@@ -1,0 +1,15 @@
+# Carpetas de compilación (Binaros y Objetos)
+**/Debug/
+**/Release/
+
+# Archivos de análisis de compilación individuales
+*.o
+*.d
+*.su
+
+# Archivos de configuración local del usuario (Rutas de tu PC)
+*.local
+.settings/
+
+# Archivos temporales o reportes de CubeMX
+**/mxproject
