@@ -4,10 +4,11 @@
  * Soporta clones rebeldes con firmas WHO_AM_I alternativas.
  * @author         : Ivan Barajas Enciso (IvanBE204)
  * @date           : Julio 2026
- * @version        : 1.0.0
+ * @version        : 1.0.1
  * *******************************************************************************
  * @note
  * Skill is nothing with kindness. Just code, fail and try again.
+ * July/15: added the Kalman filter object!
  *******************************************************************************
  * @attention
  *
@@ -22,8 +23,8 @@
 #ifndef MPU6050_H_
 #define MPU6050_H_
 
-//#include "stm32f4xx_hal.h" // Uncomment this if you are using a STM32F4... board (like the F411 NUCLEO)
-#include "stm32f1xx_hal.h" //Uncomment this if you are using a STM32F1... board (like the bluepill)
+#include "stm32f4xx_hal.h" // Uncomment this if you are using a STM32F4... board (like the F411 NUCLEO)
+//#include "stm32f1xx_hal.h" //Uncomment this if you are using a STM32F1... board (like the bluepill)
 
 #define MPU_ADDR 0xD0 //8-bit I2C slave direccion of the MPU6050
 
@@ -91,10 +92,14 @@ typedef struct {
 
 	union {
 		MPU_RawData raw_data;
-		uint8_t bytes[sizeof(MPU_RawData)];
+		uint8_t raw_bytes[sizeof(MPU_RawData)];
 	};
 
-	MPU_ScaledData scaled_data;
+	union {
+		MPU_ScaledData scaled_data;
+		uint8_t scaled_bytes[sizeof(MPU_ScaledData)];
+	};
+
 	I2C_HandleTypeDef *i2cHandler;
 	float LSB_gyro;
 	float LSB_accel;
@@ -104,6 +109,22 @@ typedef struct {
 	int16_t offset_gx,offset_gy,offset_gz;
 }MPU6050_t;
 
+
+// =================== KALMAN TYPEDEF ======================
+
+typedef struct {
+	// Covariance matrix values for the process value, the sensor bias and sensor noise
+	float Q_angle; float Q_bias;  float R_angle;
+
+	// calculated angle, sensor bias and gyroscope rate
+	float angle; float bias; float rate;
+
+	uint32_t time_stamp;
+	float dt;
+	// Covariance matrix
+	float P[2][2];
+
+}KalmanFilter_t;
 //Function prototypes
 uint8_t MPU6050_Default_Init(I2C_HandleTypeDef *hi2c,MPU6050_t *sensor);
 uint8_t MPU6050_Custom_Init(I2C_HandleTypeDef *hi2c,MPU6050_t *sensor,uint8_t dlpf_mode,uint8_t gyro_range,uint8_t accel_range);
@@ -117,4 +138,7 @@ void MPU6050_Calibrate(MPU6050_t *sensor,uint8_t samples);
 void MPU6050_Reset(MPU6050_t *sensor);
 void MPU6050_Set_Gyro_Range(MPU6050_t *sensor,uint8_t gyro_range);
 void MPU6050_Set_Accel_Range(MPU6050_t *sensor,uint8_t accel_range);
+
+void Kalman_init(KalmanFilter_t * kalman);
+float Kalman_compute(KalmanFilter_t * kalman, float angle,float angle_vel);
 #endif /* MPU6050_H_ */

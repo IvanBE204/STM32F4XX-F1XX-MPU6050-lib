@@ -4,10 +4,11 @@
  * Soporta clones rebeldes con firmas WHO_AM_I alternativas.
  * @author         : Ivan Barajas Enciso (IvanBE204)
  * @date           : Julio 2026
- * @version        : 1.0.0
+ * @version        : 1.0.1
  * *******************************************************************************
  * @note
  * Skill is nothing with kindness. Just code, fail and try again.
+ * July/15: added the Kalman filter object!
  *******************************************************************************
  * @attention
  *
@@ -146,7 +147,7 @@ void MPU6050_Reset(MPU6050_t *sensor) {
 uint8_t MPU6050_Read_Raw_Poll(MPU6050_t *sensor){
 
 	//We read all 14 bytes and check if the recieve data is intact
-	if (HAL_I2C_Mem_Read(sensor->i2cHandler, MPU_ADDR, ACCEL_XOUT_H, 1, sensor->bytes, 14, 1000) != HAL_OK) {
+	if (HAL_I2C_Mem_Read(sensor->i2cHandler, MPU_ADDR, ACCEL_XOUT_H, 1, sensor->raw_bytes, 14, 1000) != HAL_OK) {
 	        return 0; // Si falla la comunicación, salimos
 	    }
 
@@ -168,7 +169,7 @@ uint8_t MPU6050_Read_Raw_IT(MPU6050_t *sensor){
 	// Marcamos que ESTE sensor en específico está ocupando el bus en modo IT
 	    sensor->rx_busy = 1;
 
-	    if (HAL_I2C_Mem_Read_IT(sensor->i2cHandler, MPU_ADDR, ACCEL_XOUT_H, 1, sensor->bytes, 14) != HAL_OK) {
+	    if (HAL_I2C_Mem_Read_IT(sensor->i2cHandler, MPU_ADDR, ACCEL_XOUT_H, 1, sensor->raw_bytes, 14) != HAL_OK) {
 	        sensor->rx_busy = 0; // Si el bus estaba ocupado por otro sensor, cancelamos la bandera
 	        return 0;
 	    }
@@ -289,4 +290,68 @@ void MPU6050_Interrupt_Handler(MPU6050_t *sensor) {
     sensor->scaled_data.gx = (float)sensor->raw_data.gx / sensor->LSB_gyro;
     sensor->scaled_data.gy = (float)sensor->raw_data.gy / sensor->LSB_gyro;
     sensor->scaled_data.gz = (float)sensor->raw_data.gz / sensor->LSB_gyro;
+}
+
+
+// ===================== KALMAN FILTER CODE ===============================
+void Kalman_init(KalmanFilter_t * kalman){
+ // Initialize all variables with standard values
+ kalman->Q_angle = 0.001f;
+ kalman->Q_bias = 0.003f;
+ kalman->R_angle = 0.03f;
+ kalman->P[0][0] = 0.1f;
+ kalman->P[0][1] = 0.0f;
+ kalman->P[1][0] = 0.0f;
+ kalman->P[1][1] = 0.1f;
+ kalman->angle = 0.0f;
+ kalman->bias = 0.0f;
+ kalman->rate = 0.0f;
+ kalman->dt = 0.0f;
+ kalman->time_stamp = HAL_GetTick();
+}
+
+float Kalman_compute(KalmanFilter_t * kalman, float angle,float angle_vel){
+	//calculate dt
+	uint32_t this_moment = HAL_GetTick();
+	kalman->dt = (float)(this_moment - kalman->time_stamp)/1000.0f;
+	kalman->time_stamp = this_moment;
+
+	// if dt is too small set it to a manageable amount
+	if(kalman->dt <= 0.0f) kalman->dt = 0.001f;
+
+	//Calculate angle and rate
+	kalman->rate = angle_vel - kalman->bias;
+	kalman->angle += kalman->dt*kalman->rate;
+
+	kalman->P[0][0] += kalman->dt * (kalman->dt * kalman->P[1][1] - kalman->P[0][1] - kalman->P[1][0] + kalman->Q_angle);
+	kalman->P[0][1] -= kalman->dt * kalman->P[1][1];
+	kalman->P[1][0] -= kalman->dt * kalman->P[1][1];
+	kalman->P[1][1] += kalman->Q_bias * kalman->dt;
+
+	// --- Step 2: Correction and update of values ---
+	        // 1. Innovación (Diferencia entre medición real y predicción)
+	        float y = angle - kalman->angle;
+
+	        // 2. Covariance of the
+	        float S = kalman->P[0][0] + kalman->R_angle;
+
+	        // 3. Calculate kalman gain
+	        float K[2];
+	        K[0] = kalman->P[0][0] / S;
+	        K[1] = kalman->P[1][0] / S;
+
+	        // 4. update state with corrected values
+	        kalman->angle += K[0] * y;
+	        kalman->bias  += K[1] * y;
+
+	        // 5.Update covariance matrix
+	        float P00_temp = kalman->P[0][0];
+	        float P01_temp = kalman->P[0][1];
+
+	        kalman->P[0][0] -= K[0] * P00_temp;
+	        kalman->P[0][1] -= K[0] * P01_temp;
+	        kalman->P[1][0] -= K[1] * P00_temp;
+	        kalman->P[1][1] -= K[1] * P01_temp;
+
+return kalman->angle;
 }
