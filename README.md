@@ -5,6 +5,9 @@ The library has a set of functions for seemless implementation and ease of use!
 To use it just create an MPU6050 object like this
 MPU6050_t myMPU;
 
-Then initialize it with either the defaulta_ini or the custom_init.
+Then initialize it with either the default_ini or the custom_init.
 
 Once everything is done you can start reading values!
+
+UPDATE JULY/15: Kalman filter added to the library!
+It comes as a separate object KalmanFilter_t. Same thing as the MPU6050_t, initialize the object and just use it!
